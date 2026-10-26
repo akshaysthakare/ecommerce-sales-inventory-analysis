@@ -1,0 +1,85 @@
+CREATE DATABASE ecommerce;
+
+
+USE ecommerce;
+
+show tables;
+
+USE ecommerce;
+
+-- 1. Total orders and total revenue
+SELECT COUNT(DISTINCT order_id) AS total_orders,
+       ROUND(SUM(price), 2) AS total_revenue
+FROM order_items;
+
+
+-- 2. Revenue per month
+SELECT LEFT(o.order_purchase_timestamp, 7) AS month,
+       ROUND(SUM(i.price), 2) AS revenue
+FROM orders o
+JOIN order_items i ON o.order_id = i.order_id
+WHERE o.order_status = 'delivered'
+GROUP BY month
+ORDER BY month;
+
+
+-- 3. How many orders were cancelled
+SELECT order_status,
+       COUNT(*) AS orders,
+       ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM orders), 2) AS percent
+FROM orders
+GROUP BY order_status
+ORDER BY orders DESC;
+
+-- ----------------------------------------------------------------------------------
+
+-- 1. Top 10 categories by revenue
+SELECT t.product_category_name_english AS category,
+       ROUND(SUM(i.price), 2) AS revenue
+FROM order_items i
+JOIN products p ON i.product_id = p.product_id
+JOIN product_category_name_translation t
+  ON p.product_category_name = t.product_category_name
+GROUP BY category
+ORDER BY revenue DESC
+LIMIT 10;
+
+
+
+-- 2. Repeat vs one-time customers
+SELECT CASE WHEN order_count > 1 THEN 'Repeat' ELSE 'One-time' END AS customer_type,
+       COUNT(*) AS customers
+FROM (
+    SELECT c.customer_unique_id, COUNT(o.order_id) AS order_count
+    FROM orders o
+    JOIN customers c ON o.customer_id = c.customer_id
+    GROUP BY c.customer_unique_id
+) x
+GROUP BY customer_type;
+
+
+
+-- 3. Categories with the highest cancellation rate
+SELECT t.product_category_name_english AS category,
+       COUNT(DISTINCT o.order_id) AS orders,
+       ROUND(COUNT(DISTINCT CASE WHEN o.order_status = 'canceled' THEN o.order_id END) * 100.0
+             / COUNT(DISTINCT o.order_id), 2) AS cancel_percent
+FROM orders o
+JOIN order_items i ON o.order_id = i.order_id
+JOIN products p ON i.product_id = p.product_id
+JOIN product_category_name_translation t
+  ON p.product_category_name = t.product_category_name
+GROUP BY category
+HAVING orders > 200
+ORDER BY cancel_percent DESC
+LIMIT 10;
+
+
+
+/* Check the inventory in Workbench*/
+
+SELECT COUNT(*) AS low_stock_products
+FROM inventory
+WHERE stock_qty <= reorder_level;
+
+
